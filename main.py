@@ -1,9 +1,14 @@
 import sensor, image, time, math
+from pyb import CAN
+
+can = CAN(2, CAN.NORMAL)
+can.restart()
 
 sensor.reset() # Initialize the camera sensor.
 sensor.set_pixformat(sensor.RGB565) # or sensor.RGB565
 sensor.set_framesize(sensor.QQVGA) # or sensor.QVGA (or others)
 sensor.skip_frames(time = 2000) # Let new settings take affect.
+sensor.set_auto_exposure(False, 400)
 clock = time.clock()
 
 thresholds = [(51, 100), (-128, -24), (-48, 51)]
@@ -12,7 +17,7 @@ thresholdsHM = [(0, 16), (-80, 92), (-60, 127)] #hail mary vision
 hfov = 70.8
 vfov = 55.6
 
-def distance(wa, ha, img):
+def get_distance(wa, ha, img):
     areaTemp = 50
     lod = img.find_blobs(thresholdsHM)
 
@@ -58,17 +63,16 @@ def distance(wa, ha, img):
         valuesRobot = [i.cx(), (i.cy() - (i.h()/2)), dh, angle]
         return valuesRobot
 
-        while(3.0 >= angle >= -3.0):
+        while (3.0 >= angle >= -3.0):
             img.draw_rectangle(i.x(), i.y(),i.w(), i.h(), color = (39, 156, 33))
 
 
-sensor.set_auto_exposure(False, 400)
-while(True):
+while (True):
     #clock.tick() # Track elapsed milliseconds between snapshots().
     img = sensor.snapshot()
-    print(distance(39.25, 17.00, img))
+    distance = get_distance(39.25, 17.00, img)
+    
+    print(distance)
+
+    can.send(distance, 14)
     #print(clock.fps())
-
-
-
-
