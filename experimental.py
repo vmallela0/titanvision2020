@@ -125,6 +125,6 @@ while(True):
         print(values)
     elif(COMMS_METHOD == "usb"):
         # values = memoryview(values)
-        usb.send(ustruct.pack("<d", values[0], values[1], values[2], values[3], values[4] ))
+        usb.send(ustruct.pack("<d", values[0], values[1], values[2], values[3], values[4]))
     elif(COMMS_METHOD == "can"):
         pass

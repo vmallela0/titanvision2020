@@ -88,16 +88,15 @@ def getAngleY(HVOV, targetCY, dh):
     angley = math.degrees(math.atan(angleDelta2/dh)) # angle y degrees change needed
     return angley
 
-def getOptimizedValues(values_history):
-    # median codeeeee....
+def getOptimizedValues():
     finalValues = []
-    for i in range(5):
+    for i in range(len(values_history)):
         medianList = []
-        for column in values_history[i]:
-            medianList.append(column)
-        return medianList
-        median = medianList[2]
-        finalValues.append(median)
+        for j in values_history[0]:
+            medianList.append(values_history[i][j])
+        medianList.sort()
+        finalValues.append(medianList[2])
+
     return finalValues
 
 def getValues(wa, ha, img):
@@ -139,20 +138,12 @@ def getValues(wa, ha, img):
             angleXArr.append(angleX)
             angleYArr.append(angleY)
 
-
-
         # returns the final values
         valuesRobotArr = []
         valuesRobotFinal = []
         valuesRobot = [targetCX, targetCY, dh, angleX, angleY]
 
-
         return valuesRobot
-
-
-
-
-
 
 while(True):
     img = sensor.snapshot()
@@ -161,7 +152,7 @@ while(True):
     # returns: centerX, centerY, distance, angleX, angleY
     unfiltered_values = getValues(TARGET_WIDTH, TARGET_HEIGHT, img)
     values_history.append(unfiltered_values)
-    values = getOptimizedValues(values_history)
+    values = getOptimizedValues()
 
     if(values == None):
         values = [-1.0,-1.0,-1.0,-1.0,-1.0]
