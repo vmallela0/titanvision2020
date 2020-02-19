@@ -9,6 +9,7 @@ from pyb import USB_VCP, CAN
 COMMS_METHOD = "print"
 TARGET_WIDTH = 39.25
 TARGET_HEIGHT = 17.00
+HISTORY_LENGTH = 10
 
 # make USB_VCP object
 usb = USB_VCP()
@@ -28,15 +29,16 @@ autoExposureSum = 0
 readExposureNum = 10
 for i in range(readExposureNum):
    autoExposureSum += sensor.get_exposure_us()
+
 autoExposure = autoExposureSum/readExposureNum
 manualExposure = int(autoExposure * KMAN) # scalefactor for decreasing autoExposure
 sensor.set_auto_exposure(False,  manualExposure) # autoset exposures
 
-
 values_history = [] # for median function
 
 # LAB color space
-thresholds = [(51, 100), (-128, -24), (-48, 51)]
+thresholds = [(10, 100), (-128, -24), (-48, 51)]
+
 
 HFOV = 70.8 # horizontal field of view
 VFOV = 55.6 # vertical field of view
@@ -88,14 +90,17 @@ def getAngleY(HVOV, targetCY, dh):
     angley = math.degrees(math.atan(angleDelta2/dh)) # angle y degrees change needed
     return angley
 
-def getOptimizedValues():
+def getOptimizedValues(history):
     finalValues = []
-    for i in range(len(values_history)):
+    if (len(history) < HISTORY_LENGTH):
+        return [-1.0,-1.0,-1.0,-1.0,-1.0]
+
+    for j in range(len(history[0])):
         medianList = []
-        for j in values_history[0]:
-            medianList.append(values_history[i][j])
+        for i in range(len(history)):
+            medianList.append(history[i][j])
         medianList.sort()
-        finalValues.append(medianList[2])
+        finalValues.append(medianList[int(HISTORY_LENGTH/2)])
 
     return finalValues
 
@@ -107,8 +112,11 @@ def getValues(wa, ha, img):
         aspectRatio = (blob.w() / blob.h())
 
         # filters pixels, aspect ratio
-        if((blob.pixels() >= 17500) or (aspectRatio <= .7*2.84) or (aspectRatio >= 1.3*2.84)):
+        if((blob.pixels() >= 17500) or (blob.density() <.15) or (blob.density() > 0.35) or
+            (aspectRatio <= .45*2.84) or (aspectRatio >= 1.3*2.84)):
             continue
+
+        print(blob.density())
 
         #===Bounding Box===
         drawScope(img, blob)
@@ -151,14 +159,17 @@ while(True):
     # params: width actual of target and height actual of target
     # returns: centerX, centerY, distance, angleX, angleY
     unfiltered_values = getValues(TARGET_WIDTH, TARGET_HEIGHT, img)
-    values_history.append(unfiltered_values)
-    values = getOptimizedValues()
+    if(unfiltered_values == None):
+        unfiltered_values  = [-1.0,-1.0,-1.0,-1.0,-1.0]
 
-    if(values == None):
-        values = [-1.0,-1.0,-1.0,-1.0,-1.0]
+    values_history.append(unfiltered_values)
+    if len(values_history) > HISTORY_LENGTH:
+        values_history.pop(0)
+
+    values = getOptimizedValues(values_history)
 
     if(COMMS_METHOD == "print"):
-        print(values)
+        print("VALUES", values)
     elif(COMMS_METHOD == "usb"):
         # values = memoryview(values)
         usb.send(ustruct.pack("<d", values[0], values[1], values[2], values[3], values[4] ))
