@@ -1,16 +1,20 @@
-import sensor, image, time, math, ustruct
-from pyb import USB_VCP
-from pyb import CAN
+import sensor
+import image
+import time
+import math
+import ustruct
+from pyb import USB_VCP, CAN
 
 # Specify communication method: "print" "usb" "can"
-COMMS_METHOD = "usb"
+COMMS_METHOD = "print"
 TARGET_WIDTH = 39.25
 TARGET_HEIGHT = 17.00
+HISTORY_LENGTH = 10
 
 # make USB_VCP object
 usb = USB_VCP()
 
-SCREEN_CENTERP = 80 # screen center (pixels) horozontal
+SCREEN_CENTERP = 80 # screen center (pixels) horizontal
 VERTICAL_CENTERP = 60 # screen center (pixels) vertical
 
 sensor.reset() # Initialize the camera sensor.
@@ -25,12 +29,16 @@ autoExposureSum = 0
 readExposureNum = 10
 for i in range(readExposureNum):
    autoExposureSum += sensor.get_exposure_us()
+
 autoExposure = autoExposureSum/readExposureNum
 manualExposure = int(autoExposure * KMAN) # scalefactor for decreasing autoExposure
 sensor.set_auto_exposure(False,  manualExposure) # autoset exposures
 
+values_history = [] # for median function
+
 # LAB color space
-thresholds = [(51, 100), (-128, -24), (-48, 51)]
+thresholds = [(10, 100), (-128, -24), (-48, 51)]
+
 
 HFOV = 70.8 # horizontal field of view
 VFOV = 55.6 # vertical field of view
@@ -72,6 +80,7 @@ def getAngleX(VFOV, targetCX, dv):
     a1 = 2*dv*math.tan(thetaV)
     angleDelta1 = (differenceC1*(a1))/(160.0) # angle delta for x
     anglex = math.degrees(math.atan(angleDelta1/dv)) # angle x degrees change needed
+    return anglex
 
 def getAngleY(HVOV, targetCY, dh):
     thetaH = math.radians(HFOV/2.0)
@@ -79,6 +88,21 @@ def getAngleY(HVOV, targetCY, dh):
     a2 = 2*dh*math.tan(thetaH)
     angleDelta2 = (differenceC2*(a2))/(120.0) # angle delta for y
     angley = math.degrees(math.atan(angleDelta2/dh)) # angle y degrees change needed
+    return angley
+
+def getOptimizedValues(history):
+    finalValues = []
+    if (len(history) < HISTORY_LENGTH):
+        return [-1.0,-1.0,-1.0,-1.0,-1.0]
+
+    for j in range(len(history[0])):
+        medianList = []
+        for i in range(len(history)):
+            medianList.append(history[i][j])
+        medianList.sort()
+        finalValues.append(medianList[int(HISTORY_LENGTH/2)])
+
+    return finalValues
 
 def getValues(wa, ha, img):
     blobs = img.find_blobs(thresholds)
@@ -88,7 +112,8 @@ def getValues(wa, ha, img):
         aspectRatio = (blob.w() / blob.h())
 
         # filters pixels, aspect ratio
-        if((blob.pixels() >= 17500) or (aspectRatio <= .7*2.84) or (aspectRatio >= 1.3*2.84)):
+        if((blob.pixels() >= 17500) or (blob.density() <.15) or (blob.density() > 0.35) or
+            (aspectRatio <= .45*2.84) or (aspectRatio >= 1.3*2.84)):
             continue
 
         #===Bounding Box===
@@ -106,25 +131,48 @@ def getValues(wa, ha, img):
         angleX = getAngleX(VFOV, targetCX, dv)
         angleY = getAngleY(HFOV, targetCY, dh)
 
-        # returns the final values
-        valuesRobot = [targetCX, targetCY, dh, angleX, angleY]
-        return valuesRobot
+        # ===Median Values===
+        angleXArr = []
+        angleYArr = []
+        distanceArr = []
+        targetCXArr = []
+        targetCYArr = []
+        for i in range(15):
+            targetCXArr.append(targetCX)
+            targetCYArr.append(targetCY)
+            distanceArr.append(dh)
+            angleXArr.append(angleX)
+            angleYArr.append(angleY)
 
+        # returns the final values
+        valuesRobotArr = []
+        valuesRobotFinal = []
+        valuesRobot = [targetCX, targetCY, dh, angleX, angleY]
+
+        # deletes distance if greater than 22 ft.  (EXPERIMENTAL)
+        if (valuesRobot[2] >= 264):
+            return None
+        return valuesRobot
 
 while(True):
     img = sensor.snapshot()
 
     # params: width actual of target and height actual of target
     # returns: centerX, centerY, distance, angleX, angleY
-    values = getValues(TARGET_WIDTH, TARGET_HEIGHT, img)
+    unfiltered_values = getValues(TARGET_WIDTH, TARGET_HEIGHT, img)
+    if(unfiltered_values == None):
+        unfiltered_values  = [-1.0,-1.0,-1.0,-1.0,-1.0]
 
-    if(values == None):
-        values = [-1.0,-1.0,-1.0,-1.0,-1.0]
+    values_history.append(unfiltered_values)
+    if (len(values_history) > HISTORY_LENGTH) or (values_history[0][2] >= 264):
+        values_history.pop(0)
+
+    values = getOptimizedValues(values_history)
 
     if(COMMS_METHOD == "print"):
         print(values)
     elif(COMMS_METHOD == "usb"):
         # values = memoryview(values)
-        usb.send(ustruct.pack("<d", values[0], values[1], values[2], values[3], values[4]))
+        usb.send(ustruct.pack("<d", values[0], values[1], values[2], values[3], values[4] ))
     elif(COMMS_METHOD == "can"):
         pass
