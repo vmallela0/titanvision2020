@@ -104,7 +104,7 @@ def getOptimizedValues(history):
 
     return finalValues
 
-def getValues(wa, ha, img):
+def getUnfilteredValues(wa, ha, img):
     blobs = img.find_blobs(thresholds)
 
     for blob in blobs:
@@ -153,13 +153,9 @@ def getValues(wa, ha, img):
         if (valuesRobot[2] >= 264):
             return None
         return valuesRobot
-
-while(True):
-    img = sensor.snapshot()
-
-    # params: width actual of target and height actual of target
-    # returns: centerX, centerY, distance, angleX, angleY
-    unfiltered_values = getValues(TARGET_WIDTH, TARGET_HEIGHT, img)
+    
+def getFinalValues(TARGET_WIDTH, TARGET_HEIGHT, values_history, img):
+    unfiltered_values = getUnfilteredValues(TARGET_WIDTH, TARGET_HEIGHT, img)
     if(unfiltered_values == None):
         unfiltered_values  = [-1.0,-1.0,-1.0,-1.0,-1.0]
 
@@ -168,6 +164,13 @@ while(True):
         values_history.pop(0)
 
     values = getOptimizedValues(values_history)
+
+while(True):
+    img = sensor.snapshot()
+
+    # params: width actual of target and height actual of target
+    # returns: centerX, centerY, distance, angleX, angleY
+    values = getFinalValues(TARGET_WIDTH, TARGET_HEIGHT, values_history, img)
 
     if(COMMS_METHOD == "print"):
         print(values)

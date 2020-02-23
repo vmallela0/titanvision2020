@@ -149,7 +149,11 @@ def getValues(wa, ha, img):
         # returns the final values
         valuesRobotArr = []
         valuesRobotFinal = []
-        valuesRobot = [targetCX, targetCY, dh, angleX, angleY]
+        distance = dv
+        while(angleY >= 15):
+            distance = dh
+            
+        valuesRobot = [targetCX, targetCY, distance, angleX, angleY] 
 
         return valuesRobot
 
