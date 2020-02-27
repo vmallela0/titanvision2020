@@ -4,6 +4,7 @@ import time
 import math
 import ustruct
 from pyb import USB_VCP, CAN
+import pyb
 
 # Specify communication method: "print" "usb" "can"
 COMMS_METHOD = "print"
@@ -13,13 +14,15 @@ HISTORY_LENGTH = 10
 
 # make USB_VCP object
 usb = USB_VCP()
+led = pyb.LED(3)
 
-SCREEN_CENTERP = 80 # screen center (pixels) horizontal
-VERTICAL_CENTERP = 60 # screen center (pixels) vertical
+SCREEN_CENTERP = 160 # screen center (pixels) horizontal
+VERTICAL_CENTERP = 120 # screen center (pixels) vertical
+
 
 sensor.reset() # Initialize the camera sensor.
 sensor.set_pixformat(sensor.RGB565) # or sensor.RGB565
-sensor.set_framesize(sensor.QQVGA) # or sensor.QVGA (or others)
+sensor.set_framesize(sensor.QVGA) # or sensor.QVGA (or others)
 sensor.skip_frames(time = 2000) # Let new settings take affect.
 clock = time.clock()
 
@@ -31,13 +34,14 @@ for i in range(readExposureNum):
    autoExposureSum += sensor.get_exposure_us()
 
 autoExposure = autoExposureSum/readExposureNum
-manualExposure = int(autoExposure * KMAN) # scalefactor for decreasing autoExposure
+manualExposure = int(autoExposure * KMAN) # scale factor for decreasing autoExposure
 sensor.set_auto_exposure(False,  manualExposure) # autoset exposures
 
 values_history = [] # for median function
 
 # LAB color space
-thresholds = [(10, 100), (-128, -24), (-48, 51)]
+thresholds = [(20, 100), (-128, -24), (-48, 51)]
+
 
 
 HFOV = 70.8 # horizontal field of view
@@ -64,14 +68,14 @@ def getDistanceVFOV(wa, ha, blob):
     d3 = ((ha/2.0)*img.height())
     d4 = 2.0*(blob.h()/2.0)*math.tan(math.radians(VFOV/2.0))
     dv = (d3/d4)
-    dv = 1.25*dv # fudge factor calcs
+    dv =1.33*dv # fudge factor calcs 1.25
     return dv
 
 def getDistanceHFOV(wa, ha, blob):
     d1 = ((wa/2.0)*img.width())
     d2 = 2.0*(blob.w()/2.0)*math.tan(math.radians(HFOV/2.0))
     dh = (d1/d2)
-    dh = 1.25*dh # fudge factor calcs
+    dh = 1.33*dh # fudge factor calcs 1.25
     return dh
 
 def getAngleX(VFOV, targetCX, dv):
@@ -90,29 +94,17 @@ def getAngleY(HVOV, targetCY, dh):
     angley = math.degrees(math.atan(angleDelta2/dh)) # angle y degrees change needed
     return angley
 
-def getOptimizedValues(history):
-    finalValues = []
-    if (len(history) < HISTORY_LENGTH):
-        return [-1.0,-1.0,-1.0,-1.0,-1.0]
-
-    for j in range(len(history[0])):
-        medianList = []
-        for i in range(len(history)):
-            medianList.append(history[i][j])
-        medianList.sort()
-        finalValues.append(medianList[int(HISTORY_LENGTH/2)])
-
-    return finalValues
 
 def getUnfilteredValues(wa, ha, img):
-    blobs = img.find_blobs(thresholds)
+    blobs = img.find_blobs(thresholds, area_threshold = 10)
 
     for blob in blobs:
         # filtering based on aspect ratio
         aspectRatio = (blob.w() / blob.h())
 
         # filters pixels, aspect ratio
-        if((blob.pixels() >= 17500) or (blob.density() <.15) or (blob.density() > 0.35) or
+        if((blob.pixels() >= 17500) or
+            #(blob.density() <.15) or (blob.density() > 0.35) or
             (aspectRatio <= .45*2.84) or (aspectRatio >= 1.3*2.84)):
             continue
 
@@ -131,49 +123,33 @@ def getUnfilteredValues(wa, ha, img):
         angleX = getAngleX(VFOV, targetCX, dv)
         angleY = getAngleY(HFOV, targetCY, dh)
 
-        # ===Median Values===
-        angleXArr = []
-        angleYArr = []
-        distanceArr = []
-        targetCXArr = []
-        targetCYArr = []
-        for i in range(15):
-            targetCXArr.append(targetCX)
-            targetCYArr.append(targetCY)
-            distanceArr.append(dh)
-            angleXArr.append(angleX)
-            angleYArr.append(angleY)
-
         # returns the final values
-        valuesRobotArr = []
-        valuesRobotFinal = []
         valuesRobot = [targetCX, targetCY, dh, angleX, angleY]
 
-        # deletes distance if greater than 22 ft.  (EXPERIMENTAL)
-        if (valuesRobot[2] >= 264):
+        # deletes distance if greater than 22 ft.
+        if (valuesRobot[2]  >= 280):
             return None
         return valuesRobot
-    
-def getFinalValues(TARGET_WIDTH, TARGET_HEIGHT, values_history, img):
-    unfiltered_values = getUnfilteredValues(TARGET_WIDTH, TARGET_HEIGHT, img)
-    if(unfiltered_values == None):
-        unfiltered_values  = [-1.0,-1.0,-1.0,-1.0,-1.0]
+        #return (blob.w())
 
-    values_history.append(unfiltered_values)
-    if (len(values_history) > HISTORY_LENGTH) or (values_history[0][2] >= 264):
-        values_history.pop(0)
-
-    values = getOptimizedValues(values_history)
+def lightFlash(values):
+    if(values == None):
+        values = [-1,-1,-1,-1,-1]
+    if(values != [-1,-1,-1,-1,-1]):
+        led.on()
+    else:
+        led.off()    
 
 while(True):
     img = sensor.snapshot()
 
     # params: width actual of target and height actual of target
     # returns: centerX, centerY, distance, angleX, angleY
-    values = getFinalValues(TARGET_WIDTH, TARGET_HEIGHT, values_history, img)
+    values = getUnfilteredValues(TARGET_WIDTH, TARGET_HEIGHT , img)
+    lightFlash(values)
 
     if(COMMS_METHOD == "print"):
-        print(values)
+            print(values)
     elif(COMMS_METHOD == "usb"):
         # values = memoryview(values)
         usb.send(ustruct.pack("<d", values[0], values[1], values[2], values[3], values[4] ))
