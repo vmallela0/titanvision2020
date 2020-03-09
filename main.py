@@ -7,16 +7,15 @@ from pyb import USB_VCP, CAN
 import pyb
 
 # Specify communication method: "print" "usb" "can"
-COMMS_METHOD = "print"
+COMMS_METHOD = "usb"
 TARGET_WIDTH = 39.25
 TARGET_HEIGHT = 17.00
-HISTORY_LENGTH = 10
 
 # make USB_VCP object
 usb = USB_VCP()
-led1 = pyb.LED(1)
-led2 = pyb.LED(2)
-led3 = pyb.LED(3)
+red = pyb.LED(1)
+green = pyb.LED(2)
+blue = pyb.LED(3)
 
 SCREEN_CENTERP = 160 # screen center (pixels) horizontal
 VERTICAL_CENTERP = 120 # screen center (pixels) vertical
@@ -42,7 +41,7 @@ sensor.set_auto_exposure(False,  manualExposure) # autoset exposures
 values_history = [] # for median function
 
 # LAB color space
-thresholds = [(20, 100), (-128, -24), (-48, 51)]
+thresholds = [(20, 100), (-128, -24), (-48, 51)] # green light
 
 
 
@@ -69,14 +68,14 @@ def getDistanceVFOV(wa, ha, blob):
     d3 = ((ha/2.0)*img.height())
     d4 = 2.0*(blob.h()/2.0)*math.tan(math.radians(VFOV/2.0))
     dv = (d3/d4)
-    dv =1.35*dv # fudge factor calcs 1.25
+    dv =1.35*dv # fudge factor calcs 1.25 in front of init line
     return dv
 
 def getDistanceHFOV(wa, ha, blob):
     d1 = ((wa/2.0)*img.width())
     d2 = 2.0*(blob.w()/2.0)*math.tan(math.radians(HFOV/2.0))
     dh = (d1/d2)
-    dh = 1.35*dh # fudge factor calcs 1.25
+    dh = 1.35*dh # fudge factor calcs 1.35 behind init line
     return dh
 
 def getAngleX(VFOV, targetCX, dv):
@@ -134,17 +133,11 @@ def getUnfilteredValues(wa, ha, img):
 
 def beam(values):
     if(((values[3] >= -5) and (values[3] <= 5)) and (values[3] != -1)):
-        led1.off()
-        led3.off()
-        led2.on()
-    elif(values != [-1,-1,-1,-1,-1]):
-        led1.off()
-        led2.off()
-        led3.on()
-    else:
-        led3.off()
-        led2.off()
-        led1.on()
+        green.on()
+    elif(values != [-1,-1,-1,-1,-1,-1]):
+        blue.on()
+    elif(values == [-1,-1,-1,-1,-1,-1]):
+        red.on()
 
 
 while(True):
@@ -154,13 +147,21 @@ while(True):
     # returns: centerX, centerY, distance, angleX, angleY, blob width pixels
     values = getUnfilteredValues(TARGET_WIDTH, TARGET_HEIGHT , img)
     if(values == None):
-        values = [-1,-1,-1,-1,-1, -1]
+        values = [-1,-1,-1,-1,-1,-1]
     beam(values)
 
     if(COMMS_METHOD == "print"):
             print(values)
     elif(COMMS_METHOD == "usb"):
         # values = memoryview(values)
-        usb.send(ustruct.pack("<d", values[0], values[1], values[2], values[3], values[4], values[5]))
+        usb.send(ustruct.pack("d", values[0], values[1], values[2], values[3], values[4], values[5]))
+        ''' sending data one at a time
+        usb.send(ustruct.pack("d", values[0]))
+        usb.send(ustruct.pack("d", values[1]))
+        usb.send(ustruct.pack("d", values[2]))
+        usb.send(ustruct.pack("d", values[3]))
+        usb.send(ustruct.pack("d", values[4])) 
+        usb.send(ustruct.pack("d", values[5]))
+        '''
     elif(COMMS_METHOD == "can"):
         pass
