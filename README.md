@@ -1,7 +1,4 @@
 # Titanvision2020
-Vision for FRC Techno Titans 2020 robot (FIRST infinite recharge). 
-
-This is the OpenMV code for the 2020 Northview Techno Titans team. 
-It is written in micropython and uses an OpenMV camera. 
-
-FRC Team 1683
+A vision system for FRC team 1683's robot. Using an OpenMV camera with a green LED ring light which is mounted on our robot's turret, we successfully detect targets and retrieve distance to the target and angle to the target. 
+# Running
+Use the OpenMV IDE and make sure to change the COMMS_METHOD to "print" in order to see the output in your OpenMV terminal. 
