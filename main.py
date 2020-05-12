@@ -12,7 +12,10 @@ TARGET_WIDTH = 39.25
 TARGET_HEIGHT = 17.00
 
 # make USB_VCP object
-usb = USB_VCP()
+# this lets us know if targets are being 
+# detected without having to print it and 
+# we can see if the target is aligned as well
+usb = USB_VCP() 
 red = pyb.LED(1)
 green = pyb.LED(2)
 blue = pyb.LED(3)
@@ -48,7 +51,7 @@ thresholds = [(20, 100), (-128, -24), (-48, 51)] # green light
 HFOV = 70.8 # horizontal field of view
 VFOV = 55.6 # vertical field of view
 
-def drawScope(img, blob):
+def drawScope(img, blob): # draws a circle and crosshair where the center calculations are
     # scope view
     img.draw_cross(blob.cx(), (int(blob.cy() - (blob.h()/2))), size = 5, thickness = 1)
     img.draw_circle(blob.cx(),  (int(blob.cy() - (blob.h()/2))), 5,  thickness = 2)
@@ -56,15 +59,15 @@ def drawScope(img, blob):
     # bounding box
     img.draw_rectangle(blob.x(), blob.y(),blob.w(), blob.h())
 
-def getCenterX(blob):
+def getCenterX(blob): # getting the center value of the blob in x coordinates
     targetCX = blob.cx()
     return targetCX
 
-def getCenterY(blob):
+def getCenterY(blob): # getting the center value of the blob in y coordinates
     targetCY = blob.cy() - (blob.h()/2)
     return targetCY
 
-def getDistanceVFOV(wa, ha, blob):
+def getDistanceVFOV(wa, ha, blob): # gets the distance with the actual width/height of the target
     d3 = ((ha/2.0)*img.height())
     d4 = 2.0*(blob.h()/2.0)*math.tan(math.radians(VFOV/2.0))
     dv = (d3/d4)
@@ -78,7 +81,7 @@ def getDistanceHFOV(wa, ha, blob):
     dh = 1.35*dh # fudge factor calcs 1.35 behind init line
     return dh
 
-def getAngleX(VFOV, targetCX, dv):
+def getAngleX(VFOV, targetCX, dv): # gets the angle the turret needs to turn to be aligned with the target
     thetaV = math.radians(VFOV/2.0)
     differenceC1 = SCREEN_CENTERP - targetCX
     a1 = 2*dv*math.tan(thetaV)
@@ -108,10 +111,10 @@ def getUnfilteredValues(wa, ha, img):
             (aspectRatio <= .45*2.84) or (aspectRatio >= 1.3*2.84)):
             continue
 
-        #===Bounding Box===
+        # ===Bounding Box===
         drawScope(img, blob)
 
-        #==Centers===
+        # ==Centers===
         targetCX = getCenterX(blob)
         targetCY = getCenterY(blob)
 
@@ -131,7 +134,7 @@ def getUnfilteredValues(wa, ha, img):
             return None
         return valuesRobot
 
-def beam(values):
+def beam(values): # function that shines the LED on the camera 
     if(((values[3] >= -5) and (values[3] <= 5)) and (values[3] != -1)):
         green.on()
     elif(values != [-1,-1,-1,-1,-1,-1]):
@@ -147,21 +150,13 @@ while(True):
     # returns: centerX, centerY, distance, angleX, angleY, blob width pixels
     values = getUnfilteredValues(TARGET_WIDTH, TARGET_HEIGHT , img)
     if(values == None):
-        values = [-1,-1,-1,-1,-1,-1]
+        values = [-1,-1,-1,-1,-1,-1] # makes values this when there is no blob detected
     beam(values)
 
     if(COMMS_METHOD == "print"):
             print(values)
-    elif(COMMS_METHOD == "usb"):
+    elif(COMMS_METHOD == "usb"): # sending the data via USB serial to the robot
         # values = memoryview(values)
         usb.send(ustruct.pack("d", values[0], values[1], values[2], values[3], values[4], values[5]))
-        ''' sending data one at a time
-        usb.send(ustruct.pack("d", values[0]))
-        usb.send(ustruct.pack("d", values[1]))
-        usb.send(ustruct.pack("d", values[2]))
-        usb.send(ustruct.pack("d", values[3]))
-        usb.send(ustruct.pack("d", values[4])) 
-        usb.send(ustruct.pack("d", values[5]))
-        '''
     elif(COMMS_METHOD == "can"):
         pass
